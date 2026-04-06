@@ -8,7 +8,6 @@ export function OrderComplete() {
     techName = 'Technician',
     techId = '',
     propertyId = '',
-    unitId = '',
     cart = [],
     total = 0,
   } = location.state || {}
