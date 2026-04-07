@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Package,
@@ -10,6 +10,9 @@ import {
   Trash2,
   ShoppingCart,
 } from 'lucide-react'
+import { getCatalogItems, searchCatalogItems, getCatalogItemByBarcode } from '@/services/catalog'
+import { createTransaction } from '@/services/transactions'
+import type { CatalogItem } from '@/lib/supabase'
 
 interface CartItem {
   id: string
@@ -25,32 +28,76 @@ export function Scanner() {
   const {
     techName = 'Technician',
     techId = '',
+    truckId = '',
     propertyId = '',
+    propertyName = '',
     unitId = '',
+    unitNumber = '',
   } = location.state || {}
 
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showSearch, setShowSearch] = useState(false)
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
+  const [filteredItems, setFilteredItems] = useState<CatalogItem[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // TODO: Replace with actual inventory data from Supabase
-  const availableItems = [
-    { id: '1', sku: 'PLM-001', name: 'PVC Pipe 1/2"', price: 3.5 },
-    { id: '2', sku: 'PLM-002', name: 'Copper Elbow 90°', price: 2.25 },
-    { id: '3', sku: 'ELC-001', name: 'Wire Nuts (Pack of 10)', price: 4.99 },
-    { id: '4', sku: 'ELC-002', name: 'Light Switch', price: 1.5 },
-    { id: '5', sku: 'HVA-001', name: 'HVAC Filter 16x20', price: 12.99 },
-  ]
+  // Load catalog items on mount
+  useEffect(() => {
+    loadCatalog()
+  }, [])
 
-  const handleBack = () => {
-    navigate('/location-select', { state: { techName, techId } })
+  // Update filtered items when search query changes
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      searchItems(searchQuery)
+    } else {
+      setFilteredItems(catalogItems)
+    }
+  }, [searchQuery, catalogItems])
+
+  const loadCatalog = async () => {
+    setIsLoading(true)
+    try {
+      const items = await getCatalogItems()
+      setCatalogItems(items)
+      setFilteredItems(items)
+    } catch (error) {
+      console.error('Failed to load catalog:', error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleScanBarcode = () => {
+  const searchItems = async (query: string) => {
+    setIsLoading(true)
+    try {
+      const items = await searchCatalogItems(query)
+      setFilteredItems(items)
+    } catch (error) {
+      console.error('Failed to search catalog:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleBack = () => {
+    navigate('/location-select', { state: { techName, techId, truckId } })
+  }
+
+  const handleScanBarcode = async () => {
     // TODO: Implement actual barcode scanning with html5-qrcode or quagga2
-    // For now, simulate scanning by adding a random item
-    const randomItem = availableItems[Math.floor(Math.random() * availableItems.length)]
-    addItemToCart(randomItem)
+    // For now, simulate scanning by adding a random item from catalog
+    if (catalogItems.length > 0) {
+      const randomItem = catalogItems[Math.floor(Math.random() * catalogItems.length)]
+      addItemToCart({
+        id: randomItem.id,
+        sku: randomItem.sku,
+        name: randomItem.name,
+        price: randomItem.unit_cost
+      })
+    }
   }
 
   const addItemToCart = (item: { id: string; sku: string; name: string; price: number }) => {
@@ -88,25 +135,55 @@ export function Scanner() {
     return cart.reduce((total, item) => total + item.price * item.quantity, 0)
   }
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) return
+    if (!truckId || !techId) {
+      alert('Missing truck or technician information')
+      return
+    }
 
-    navigate('/order-complete', {
-      state: {
-        techName,
-        techId,
-        propertyId,
-        unitId,
+    setIsSubmitting(true)
+
+    try {
+      const result = await createTransaction({
+        truckId,
+        technicianId: techId,
+        technicianName: techName,
+        propertyId: propertyId || undefined,
+        propertyName: propertyName || undefined,
+        unitId: unitId || undefined,
+        unitNumber: unitNumber || undefined,
+        transactionType: 'checkout',
         cart,
-        total: calculateTotal(),
-      },
-    })
-  }
+        notes: undefined
+      })
 
-  const filteredItems = availableItems.filter((item) =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.sku.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+      if (result.success) {
+        navigate('/order-complete', {
+          state: {
+            techName,
+            techId,
+            truckId,
+            propertyId,
+            propertyName,
+            unitId,
+            unitNumber,
+            cart,
+            total: calculateTotal(),
+            transactionId: result.transactionId,
+            invoiceNumber: result.invoiceNumber,
+          },
+        })
+      } else {
+        alert(`Failed to create transaction: ${result.error}`)
+        setIsSubmitting(false)
+      }
+    } catch (error) {
+      console.error('Checkout error:', error)
+      alert('Failed to complete checkout')
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 flex flex-col">
@@ -179,26 +256,37 @@ export function Scanner() {
                   className="w-full h-16 px-6 text-lg font-medium border-2 border-gray-300 rounded-2xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all shadow-sm"
                 />
                 <div className="max-h-96 overflow-y-auto space-y-3">
-                  {filteredItems.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => addItemToCart(item)}
-                      className="w-full p-5 bg-gradient-to-r from-gray-50 to-blue-50/50 hover:from-blue-50 hover:to-blue-100 rounded-2xl flex items-center justify-between active:scale-98 transition-all shadow-sm border border-gray-200"
-                    >
-                      <div className="text-left">
-                        <p className="font-bold text-gray-900 text-lg">{item.name}</p>
-                        <p className="text-sm text-gray-600 font-medium">{item.sku}</p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <p className="text-xl font-bold text-blue-600">
-                          ${item.price.toFixed(2)}
-                        </p>
-                        <div className="bg-blue-100 p-2 rounded-xl">
-                          <Plus className="w-6 h-6 text-blue-600" strokeWidth={2.5} />
+                  {isLoading ? (
+                    <div className="text-center py-8 text-gray-500">Loading items...</div>
+                  ) : filteredItems.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">No items found</div>
+                  ) : (
+                    filteredItems.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => addItemToCart({
+                          id: item.id,
+                          sku: item.sku,
+                          name: item.name,
+                          price: item.unit_cost
+                        })}
+                        className="w-full p-5 bg-gradient-to-r from-gray-50 to-blue-50/50 hover:from-blue-50 hover:to-blue-100 rounded-2xl flex items-center justify-between active:scale-98 transition-all shadow-sm border border-gray-200"
+                      >
+                        <div className="text-left">
+                          <p className="font-bold text-gray-900 text-lg">{item.name}</p>
+                          <p className="text-sm text-gray-600 font-medium">{item.sku}</p>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                        <div className="flex items-center gap-4">
+                          <p className="text-xl font-bold text-blue-600">
+                            ${item.unit_cost.toFixed(2)}
+                          </p>
+                          <div className="bg-blue-100 p-2 rounded-xl">
+                            <Plus className="w-6 h-6 text-blue-600" strokeWidth={2.5} />
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -276,9 +364,10 @@ export function Scanner() {
                   </div>
                   <button
                     onClick={handleCheckout}
-                    className="w-full h-20 bg-gradient-to-br from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white text-2xl font-bold rounded-2xl shadow-2xl hover:shadow-3xl active:scale-98 transition-all"
+                    disabled={isSubmitting}
+                    className="w-full h-20 bg-gradient-to-br from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white text-2xl font-bold rounded-2xl shadow-2xl hover:shadow-3xl active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Complete Order →
+                    {isSubmitting ? 'Processing...' : 'Complete Order →'}
                   </button>
                 </div>
               </>

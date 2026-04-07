@@ -5,7 +5,7 @@ import { Package, ChevronLeft, MapPin } from 'lucide-react'
 export function LocationSelect() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { techName = 'Technician', techId = '' } = location.state || {}
+  const { techName = 'Technician', techId = '', truckId = '' } = location.state || {}
 
   const [selectedProperty, setSelectedProperty] = useState('')
   const [selectedUnit, setSelectedUnit] = useState('')
@@ -28,7 +28,7 @@ export function LocationSelect() {
     : []
 
   const handleBack = () => {
-    navigate('/home', { state: { techName, techId } })
+    navigate('/home', { state: { techName, techId, truckId } })
   }
 
   const handleNext = () => {
@@ -36,12 +36,18 @@ export function LocationSelect() {
       return
     }
 
+    const property = properties.find(p => p.id === selectedProperty)
+    const unit = units.find(u => u.id === selectedUnit)
+
     navigate('/scanner', {
       state: {
         techName,
         techId,
+        truckId,
         propertyId: selectedProperty,
+        propertyName: property?.name || '',
         unitId: selectedUnit,
+        unitNumber: unit?.number || '',
       },
     })
   }

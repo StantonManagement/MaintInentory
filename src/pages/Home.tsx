@@ -4,18 +4,18 @@ import { Package, LogOut, ShoppingCart, RotateCcw } from 'lucide-react'
 export function Home() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { techName = 'Technician', techId = '' } = location.state || {}
+  const { techName = 'Technician', techId = '', truckId = '' } = location.state || {}
 
   const handleSignOut = () => {
     navigate('/')
   }
 
   const handleNewOrder = () => {
-    navigate('/location-select', { state: { techName, techId } })
+    navigate('/location-select', { state: { techName, techId, truckId } })
   }
 
   const handleReturnItems = () => {
-    navigate('/return', { state: { techName, techId } })
+    navigate('/return', { state: { techName, techId, truckId } })
   }
 
   return (

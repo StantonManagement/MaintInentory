@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Package } from 'lucide-react'
+import { authenticatePin } from '@/services/auth'
 
 export function PinLogin() {
   const [pin, setPin] = useState('')
@@ -13,7 +14,7 @@ export function PinLogin() {
       const newPin = pin + num
       setPin(newPin)
       if (newPin.length === 4) {
-        authenticatePin(newPin)
+        verifyPin(newPin)
       }
     }
   }
@@ -23,35 +24,33 @@ export function PinLogin() {
     setError('')
   }
 
-  const authenticatePin = async (pinValue: string) => {
+  const verifyPin = async (pinValue: string) => {
     setIsAuthenticating(true)
     setError('')
 
     try {
-      // TODO: Replace with actual PIN authentication
-      // For now, accept any 4-digit PIN for demo
-      await new Promise(resolve => setTimeout(resolve, 500)) // Simulate API call
+      // Call real authentication service
+      const result = await authenticatePin(pinValue)
 
-      // Mock authentication - accept 1234 as Stan, 5678 as Javier
-      let techName = ''
-      if (pinValue === '1234') {
-        techName = 'Stan'
-      } else if (pinValue === '5678') {
-        techName = 'Javier'
+      if (result.success && result.technicianId && result.technicianName && result.truckId) {
+        // Show welcome message briefly
+        setError(`Welcome, ${result.technicianName}!`)
+
+        // Navigate to home after brief delay
+        setTimeout(() => {
+          navigate('/home', {
+            state: {
+              techName: result.technicianName,
+              techId: result.technicianId,
+              truckId: result.truckId
+            }
+          })
+        }, 1000)
       } else {
-        setError('Invalid PIN')
+        setError(result.error || 'Invalid PIN')
         setPin('')
         setIsAuthenticating(false)
-        return
       }
-
-      // Show welcome message briefly
-      setError(`Welcome, ${techName}!`)
-
-      // Navigate to home after brief delay
-      setTimeout(() => {
-        navigate('/home', { state: { techName, techId: pinValue } })
-      }, 1000)
     } catch (err) {
       setError('Authentication failed')
       setPin('')
