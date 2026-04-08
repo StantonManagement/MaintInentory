@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Package,
@@ -7,51 +7,59 @@ import {
   DollarSign,
   TrendingUp,
 } from 'lucide-react'
-import { catalogItems } from '../../data/mock/catalog'
-import { transactions } from '../../data/mock/transactions'
-import { stockLevels } from '../../data/mock/technicians'
-import { categoryLabels } from '../../data/mock/catalog'
+import { getDashboardMetrics, getBelowMinItems, getRecentTransactions, type BelowMinItem, type RecentTransaction } from '@/services/dashboard'
+
+const categoryLabels: Record<string, string> = {
+  plumbing: 'Plumbing',
+  electrical: 'Electrical',
+  hardware: 'Hardware',
+  paint: 'Paint',
+  lighting: 'Lighting',
+  safety: 'Safety',
+  hvac: 'HVAC',
+  appliance_parts: 'Appliance Parts',
+  flooring: 'Flooring',
+  cleaning: 'Cleaning',
+  doors_locks: 'Doors & Locks',
+  windows: 'Windows',
+  other: 'Other',
+}
 
 export function Dashboard() {
   const navigate = useNavigate()
+  const [isLoading, setIsLoading] = useState(true)
+  const [metrics, setMetrics] = useState({
+    totalCatalogItems: 0,
+    belowMinCount: 0,
+    transactionsToday: 0,
+    spendThisWeek: 0,
+    spendThisMonth: 0,
+  })
+  const [belowMinItems, setBelowMinItems] = useState<BelowMinItem[]>([])
+  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
 
-  // Calculate metrics
-  const metrics = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0]
-    const todayTransactions = transactions.filter(t => t.created_at.startsWith(today))
-    
-    const weekStart = new Date()
-    weekStart.setDate(weekStart.getDate() - 7)
-    const weekTransactions = transactions.filter(t => new Date(t.created_at) >= weekStart)
-    
-    const monthStart = new Date()
-    monthStart.setDate(monthStart.getDate() - 30)
-    const monthTransactions = transactions.filter(t => new Date(t.created_at) >= monthStart)
-
-    const weekSpend = weekTransactions.reduce((sum, t) => sum + (t.type === 'checkout' ? t.total : 0), 0)
-    const monthSpend = monthTransactions.reduce((sum, t) => sum + (t.type === 'checkout' ? t.total : 0), 0)
-
-    // Find items below minimum
-    const belowMinItems = stockLevels
-      .map(stock => {
-        const catalogItem = catalogItems.find(c => c.id === stock.catalog_item_id)
-        if (!catalogItem || !catalogItem.is_active) return null
-        const isBelowMin = stock.current_quantity <= catalogItem.min_quantity
-        return isBelowMin ? { ...stock, catalogItem } : null
-      })
-      .filter(Boolean)
-
-    return {
-      totalCatalog: catalogItems.filter(c => c.is_active).length,
-      belowMinCount: belowMinItems.length,
-      belowMinItems,
-      todayCount: todayTransactions.length,
-      weekSpend,
-      monthSpend,
-    }
+  useEffect(() => {
+    loadDashboardData()
   }, [])
 
-  const recentTransactions = transactions.slice(0, 10)
+  const loadDashboardData = async () => {
+    setIsLoading(true)
+    try {
+      const [metricsData, belowMin, recent] = await Promise.all([
+        getDashboardMetrics(),
+        getBelowMinItems(),
+        getRecentTransactions(),
+      ])
+
+      setMetrics(metricsData)
+      setBelowMinItems(belowMin)
+      setRecentTransactions(recent)
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -62,39 +70,55 @@ export function Dashboard() {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <MetricCard
-          icon={Package}
-          label="Total Items in Catalog"
-          value={metrics.totalCatalog.toString()}
-          color="blue"
-        />
-        <MetricCard
-          icon={AlertTriangle}
-          label="Items Below Minimum"
-          value={metrics.belowMinCount.toString()}
-          color={metrics.belowMinCount > 0 ? 'red' : 'green'}
-          onClick={metrics.belowMinCount > 0 ? () => navigate('/inventory/restock') : undefined}
-        />
-        <MetricCard
-          icon={Receipt}
-          label="Transactions Today"
-          value={metrics.todayCount.toString()}
-          color="purple"
-        />
-        <MetricCard
-          icon={DollarSign}
-          label="Spend This Week"
-          value={`$${metrics.weekSpend.toFixed(2)}`}
-          color="amber"
-        />
-        <MetricCard
-          icon={TrendingUp}
-          label="Spend This Month"
-          value={`$${metrics.monthSpend.toFixed(2)}`}
-          color="green"
-        />
-      </div>
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
+                <div className="flex-1">
+                  <div className="h-4 bg-gray-200 rounded w-20 mb-2"></div>
+                  <div className="h-6 bg-gray-200 rounded w-16"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <MetricCard
+            icon={Package}
+            label="Total Items in Catalog"
+            value={metrics.totalCatalogItems.toString()}
+            color="blue"
+          />
+          <MetricCard
+            icon={AlertTriangle}
+            label="Items Below Minimum"
+            value={metrics.belowMinCount.toString()}
+            color={metrics.belowMinCount > 0 ? 'red' : 'green'}
+            onClick={metrics.belowMinCount > 0 ? () => navigate('/inventory/restock') : undefined}
+          />
+          <MetricCard
+            icon={Receipt}
+            label="Transactions Today"
+            value={metrics.transactionsToday.toString()}
+            color="purple"
+          />
+          <MetricCard
+            icon={DollarSign}
+            label="Spend This Week"
+            value={`$${metrics.spendThisWeek.toFixed(2)}`}
+            color="amber"
+          />
+          <MetricCard
+            icon={TrendingUp}
+            label="Spend This Month"
+            value={`$${metrics.spendThisMonth.toFixed(2)}`}
+            color="green"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Below Minimum Items */}
@@ -106,7 +130,13 @@ export function Dashboard() {
             </h2>
           </div>
           <div className="p-6">
-            {metrics.belowMinItems.length === 0 ? (
+            {isLoading ? (
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-12 bg-gray-100 rounded animate-pulse"></div>
+                ))}
+              </div>
+            ) : belowMinItems.length === 0 ? (
               <div className="text-center py-8">
                 <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                   <span className="text-3xl">✓</span>
@@ -127,13 +157,13 @@ export function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {metrics.belowMinItems.map((item: any) => (
-                      <tr key={item.catalog_item_id} className="hover:bg-gray-50">
+                    {belowMinItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50">
                         <td className="py-3 font-medium text-gray-900">
-                          {item.catalogItem.name}
+                          {item.name}
                         </td>
                         <td className="py-3 text-sm text-gray-600">
-                          {categoryLabels[item.catalogItem.category] || item.catalogItem.category}
+                          {categoryLabels[item.category] || item.category}
                         </td>
                         <td className="py-3 text-center">
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
@@ -141,10 +171,10 @@ export function Dashboard() {
                           </span>
                         </td>
                         <td className="py-3 text-center text-gray-600">
-                          {item.catalogItem.min_quantity}
+                          {item.min_quantity}
                         </td>
                         <td className="py-3 text-center font-medium text-amber-600">
-                          {item.catalogItem.max_quantity - item.current_quantity}
+                          {item.reorder_quantity}
                         </td>
                       </tr>
                     ))}
@@ -164,52 +194,66 @@ export function Dashboard() {
             </h2>
           </div>
           <div className="p-6">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <th className="pb-3">Time</th>
-                    <th className="pb-3">Tech</th>
-                    <th className="pb-3">Building</th>
-                    <th className="pb-3">Unit</th>
-                    <th className="pb-3 text-right">Total</th>
-                    <th className="pb-3 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {recentTransactions.map((t) => (
-                    <tr
-                      key={t.id}
-                      className="hover:bg-gray-50 cursor-pointer"
-                      onClick={() => navigate('/inventory/transactions')}
-                    >
-                      <td className="py-3 text-sm text-gray-600">
-                        {new Date(t.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="py-3 font-medium text-gray-900">{t.tech_name}</td>
-                      <td className="py-3 text-sm text-gray-600 truncate max-w-[150px]">
-                        {t.property_name}
-                      </td>
-                      <td className="py-3 text-sm text-gray-600">{t.unit_number}</td>
-                      <td className={`py-3 text-right font-medium ${t.type === 'return' ? 'text-amber-600' : 'text-gray-900'}`}>
-                        {t.type === 'return' ? '-' : ''}${Math.abs(t.total).toFixed(2)}
-                      </td>
-                      <td className="py-3 text-center">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          t.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
-                            : t.status === 'cancelled'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {t.status}
-                        </span>
-                      </td>
+            {isLoading ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-12 bg-gray-100 rounded animate-pulse"></div>
+                ))}
+              </div>
+            ) : recentTransactions.length === 0 ? (
+              <div className="text-center py-8">
+                <Receipt className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-600 font-medium">No transactions yet</p>
+                <p className="text-sm text-gray-500 mt-1">Transactions will appear here</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="pb-3">Time</th>
+                      <th className="pb-3">Tech</th>
+                      <th className="pb-3">Building</th>
+                      <th className="pb-3">Unit</th>
+                      <th className="pb-3 text-right">Total</th>
+                      <th className="pb-3 text-center">Type</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {recentTransactions.map((t) => (
+                      <tr
+                        key={t.id}
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => navigate('/inventory/transactions')}
+                      >
+                        <td className="py-3 text-sm text-gray-600">
+                          {new Date(t.transaction_date).toLocaleDateString()}
+                        </td>
+                        <td className="py-3 font-medium text-gray-900">{t.technician_name}</td>
+                        <td className="py-3 text-sm text-gray-600 truncate max-w-[150px]">
+                          {t.property_name || 'N/A'}
+                        </td>
+                        <td className="py-3 text-sm text-gray-600">{t.unit_number || '-'}</td>
+                        <td className={`py-3 text-right font-medium ${t.transaction_type === 'return' ? 'text-amber-600' : 'text-gray-900'}`}>
+                          {t.transaction_type === 'return' ? '-' : ''}${Math.abs(t.total_amount).toFixed(2)}
+                        </td>
+                        <td className="py-3 text-center">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            t.transaction_type === 'checkout'
+                              ? 'bg-blue-100 text-blue-800'
+                              : t.transaction_type === 'return'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {t.transaction_type}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </div>
