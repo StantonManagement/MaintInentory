@@ -10,7 +10,7 @@ import {
   Trash2,
   ShoppingCart,
 } from 'lucide-react'
-import { getCatalogItems, searchCatalogItems, getCatalogItemByBarcode } from '@/services/catalog'
+import { getCatalogItems, searchCatalogItems } from '@/services/catalog'
 import { createTransaction } from '@/services/transactions'
 import type { CatalogItem } from '@/lib/supabase'
 

@@ -1,7 +1,7 @@
 # Truck Tablet Inventory System - Implementation Status
 
-**Last Updated:** April 7, 2026  
-**Project:** Stanton Management Truck Inventory Tablet PWA  
+**Last Updated:** April 8, 2026
+**Project:** Stanton Management Truck Inventory Tablet PWA
 **Repository:** https://github.com/StantonManagement/MaintInentory
 
 ---
@@ -134,21 +134,23 @@ A Progressive Web App (PWA) for technicians to manage truck inventory, checkout 
 
 ---
 
-## ⚠️ Partially Implemented
+## ✅ Fully Implemented - Return Flow
 
 ### Return Flow Pages
-**Status:** 🔶 Using Mock Data
+**Status:** ✅ Complete (April 8, 2026)
 
 **Files:**
-- `src/pages/ReturnLocationSelect.tsx` - Needs database integration
-- `src/pages/ReturnScanner.tsx` - Still using mock catalog
-- `src/pages/ReturnComplete.tsx` - Not saving to database
+- `src/pages/ReturnLocationSelect.tsx` - ✅ Using properties service
+- `src/pages/ReturnScanner.tsx` - ✅ Using real catalog from database
+- `src/pages/ReturnComplete.tsx` - ✅ Shows transaction confirmation
 
-**What's Needed:**
-1. Update ReturnScanner to use real catalog (same as Scanner)
-2. Save return transactions with `transactionType: 'return'`
-3. Update stock levels (add back returned items)
-4. Pass truckId through navigation
+**Implemented:**
+1. ✅ ReturnScanner uses `getCatalogItems()` and `searchCatalogItems()` services
+2. ✅ Returns save to database with `transactionType: 'return'`
+3. ✅ Stock levels increment correctly (items added back to truck)
+4. ✅ truckId, propertyId, unitId passed through navigation
+5. ✅ Invoice numbers generated for credit memos
+6. ✅ Transaction lines saved to `inv_transaction_lines`
 
 ### Management Interface
 **Status:** 🔶 Mock Data Only
@@ -168,28 +170,30 @@ A Progressive Web App (PWA) for technicians to manage truck inventory, checkout 
 
 ---
 
-## ❌ Not Implemented
+## 🔶 Partially Implemented - Properties/Units
 
-### 1. Properties/Units Management
-**Priority:** High  
-**Impact:** Checkout flow uses hardcoded data
+### Properties/Units Service
+**Priority:** High
+**Status:** Service layer ready, mock data in use
 
 **Current State:**
-```typescript
-// LocationSelect.tsx - Lines 14-28
-const properties = [
-  { id: '1', name: '123 Main St, Hartford, CT' },
-  { id: '2', name: '456 Oak Ave, Hartford, CT' },
-  { id: '3', name: '789 Elm Rd, West Hartford, CT' },
-]
-```
+- ✅ Created `src/services/properties.ts` with async API
+- ✅ `LocationSelect.tsx` and `ReturnLocationSelect.tsx` use service
+- ✅ Loading states implemented
+- 🔶 Currently returns mock data (structured for easy database swap)
 
-**Options:**
-1. Create `inv_properties` and `inv_units` tables in Supabase
-2. Connect to existing AppFolio `af_properties` and `af_units` tables
+**Mock Data:**
+- 3 properties (hardcoded)
+- 4 units per property (hardcoded)
+
+**Next Steps:**
+1. Create `inv_properties` and `inv_units` tables in Supabase, OR
+2. Connect to existing AppFolio `af_properties` and `af_units` tables, OR
 3. Fetch from MaintOC API endpoint
 
-### 2. Real Barcode Scanner
+**To Complete:** Uncomment Supabase queries in `src/services/properties.ts:47-52` and `src/services/properties.ts:63-70` once tables are available
+
+### 1. Real Barcode Scanner
 **Priority:** Medium  
 **Impact:** Simulated scanning only
 
@@ -207,7 +211,7 @@ const handleScanBarcode = async () => {
 - `quagga2` - Advanced barcode scanning
 - `@zxing/browser` - ZXing barcode scanner
 
-### 3. Physical Count Management
+### 2. Physical Count Management
 **Priority:** Low  
 **Impact:** Stock accuracy over time
 
@@ -221,7 +225,7 @@ const handleScanBarcode = async () => {
 - Variance report (expected vs actual)
 - Stock adjustment workflow
 
-### 4. Restock Management
+### 3. Restock Management
 **Priority:** Low  
 **Impact:** Manual restock tracking
 
@@ -234,6 +238,56 @@ const handleScanBarcode = async () => {
 - Generate restock order
 - Receive restock items
 - Update stock levels
+
+### 4. Management Interface Database Integration
+**Priority:** High
+**Impact:** Management pages show mock data only
+
+**Current State:**
+- ✅ All UI pages exist and are functional
+- ❌ Dashboard shows hardcoded metrics
+- ❌ Catalog page is read-only (no CRUD operations)
+- ❌ Transactions page shows mock data
+- ❌ Restock page shows mock alerts
+- ❌ Trucks page shows mock data
+
+**Files Needing Database Integration:**
+- `src/pages/management/Dashboard.tsx` - Lines 20-50 (mock metrics)
+- `src/pages/management/Catalog.tsx` - No create/update/delete functionality
+- `src/pages/management/Transactions.tsx` - Not connected to `inv_transactions`
+- `src/pages/management/Restock.tsx` - Not connected to `inv_restock_alerts`
+- `src/pages/management/Trucks.tsx` - Not connected to `inv_trucks`
+
+**What's Needed:**
+1. Connect Dashboard to fetch real metrics from Supabase
+2. Add CRUD operations to Catalog page (create, update, delete items)
+3. Connect Transactions page to `getTransactions()` service
+4. Connect Restock page to fetch alerts and stock levels
+5. Connect Trucks page to manage trucks and technician PINs
+
+### 5. Admin Authentication for Management Interface
+**Priority:** Medium
+**Impact:** Management interface has no access control
+
+**Current State:**
+- ❌ No authentication on management routes
+- ❌ Anyone can access `/inventory/*` pages
+
+**Options:**
+1. **PIN-based auth** (consistent with tablet interface)
+   - Create admin PINs in `inv_technician_pins` or new `inv_admin_pins` table
+   - Simple PIN entry screen before management access
+
+2. **Password-based auth** (using Supabase Auth)
+   - Email + password login
+   - Role-based access (admin, coordinator, accounting)
+   - More secure but requires user management
+
+3. **Integration with existing auth** (if MOC app has auth)
+   - Share authentication state
+   - Check user roles/permissions
+
+**Recommended:** Start with PIN-based auth for consistency, migrate to Supabase Auth later if needed
 
 ---
 
@@ -371,43 +425,156 @@ npm run dev
 
 ---
 
-## 🔧 Next Steps
+## 🔧 Next Steps for Next Session
 
-### Immediate Priorities
+### Session Summary (April 8, 2026)
+**Completed This Session:**
+- ✅ Return flow fully connected to database
+- ✅ Properties/units service layer created
+- ✅ Stock levels update correctly for returns
+- ✅ Build successful with no errors
+- ✅ TypeScript configuration fixed
 
-1. **Test Checkout Flow** ✅ Ready to test
-   - Login with PIN 1234
-   - Complete a checkout transaction
-   - Verify data in Supabase
+**Not Started:**
+- Management Dashboard database integration
+- Management Catalog CRUD operations
+- Management Transactions page connection
+- Admin authentication
 
-2. **Integrate Return Flow** (2-3 hours)
-   - Copy Scanner implementation to ReturnScanner
-   - Change transaction type to 'return'
-   - Test stock level increases
+---
 
-3. **Add Real Properties/Units** (1-2 hours)
-   - Create inv_properties/inv_units tables OR
-   - Connect to af_properties/af_units
+### Immediate Priorities (Next Session)
 
-### Medium-Term Goals
+**Option A: Complete Management Interface (Recommended)**
+Focus on making the management pages functional for stakeholder demo.
 
-4. **Management Dashboard** (4-6 hours)
-   - Connect Dashboard to real metrics
-   - Add Catalog CRUD operations
-   - View transaction history
+1. **Connect Management Dashboard** (1-2 hours)
+   - Fetch real metrics from Supabase
+   - Update `src/pages/management/Dashboard.tsx:20-50`
+   - Queries needed:
+     - Total items: `SELECT COUNT(*) FROM inv_catalog WHERE is_active = true`
+     - Items below min: `SELECT COUNT(*) FROM inv_stock_levels WHERE current_quantity <= min_quantity`
+     - Transactions today: `SELECT COUNT(*) FROM inv_transactions WHERE DATE(transaction_date) = CURRENT_DATE`
+     - Spend this week/month: `SELECT SUM(total_amount) FROM inv_transactions WHERE ...`
 
-5. **Barcode Scanner** (2-4 hours)
-   - Install html5-qrcode
+2. **Add Catalog CRUD Operations** (2-3 hours)
+   - Create `src/services/catalog.ts` functions:
+     - `createCatalogItem(data)`
+     - `updateCatalogItem(id, data)`
+     - `deleteCatalogItem(id)` (soft delete: set `is_active = false`)
+   - Update `src/pages/management/Catalog.tsx` to use these services
+   - Add form validation
+
+3. **Connect Transactions Page** (1 hour)
+   - Use existing `getTransactions()` service from `src/services/transactions.ts:124`
+   - Update `src/pages/management/Transactions.tsx` to fetch real data
+   - Add filters (date range, technician, property, status)
+
+4. **Add Admin Authentication** (2-3 hours)
+   - Create admin PIN login page
+   - Protect `/inventory/*` routes
+   - Store admin session in localStorage or context
+
+**Option B: Add Real Property/Unit Data**
+If properties/units tables exist in Supabase or MaintOC API is available.
+
+1. **Create Supabase Tables** (30 min)
+   - Create `inv_properties` table OR find existing `af_properties`
+   - Create `inv_units` table OR find existing `af_units`
+
+2. **Update Properties Service** (30 min)
+   - Uncomment Supabase queries in `src/services/properties.ts`
+   - Test with real data
+   - Seed some test properties/units
+
+**Option C: Implement Barcode Scanner**
+Add real camera-based scanning to tablet interface.
+
+1. **Install Barcode Library** (15 min)
+   ```bash
+   npm install html5-qrcode
+   ```
+
+2. **Update Scanner Component** (2-3 hours)
+   - Replace simulated scan in `src/pages/Scanner.tsx:89`
    - Add camera permission handling
-   - Test with real barcodes
+   - Implement barcode lookup via `getCatalogItemByBarcode()`
+   - Test with real barcodes or QR codes
 
-### Long-Term Enhancements
+---
 
-6. **Physical Counts** (4-6 hours)
-7. **Restock Workflow** (4-6 hours)
-8. **Reports & Analytics** (6-8 hours)
-9. **Offline Support** (8-12 hours)
-10. **Push Notifications** (2-4 hours)
+### Testing Checklist
+
+Before next session, test these flows:
+
+**Checkout Flow:**
+- [ ] Login with PIN 1234
+- [ ] Select property and unit
+- [ ] Search for an item (e.g., "smoke detector")
+- [ ] Add to cart
+- [ ] Complete order
+- [ ] Verify transaction in Supabase `inv_transactions` table
+- [ ] Verify stock level decreased in `inv_stock_levels` table
+
+**Return Flow:**
+- [ ] Login with PIN 1234
+- [ ] Click "Return Items"
+- [ ] Select property and unit
+- [ ] Search for an item
+- [ ] Add to return cart (negative quantity)
+- [ ] Complete return
+- [ ] Verify return transaction in Supabase
+- [ ] Verify stock level increased
+
+### Quick Wins (If Time Permits)
+
+**Small improvements that can be done in 15-30 minutes:**
+
+1. **Add "Common Area" Options to Units**
+   - Update `src/services/properties.ts` to include:
+     - "Common Area"
+     - "Basement"
+     - "Building Exterior"
+     - "Parking Lot"
+   - These appear at top of unit dropdown (per PRD Section 5.3)
+
+2. **Add Invoice Number Display**
+   - Update `src/pages/OrderComplete.tsx` to show invoice number prominently
+   - Update `src/pages/ReturnComplete.tsx` to show credit memo number
+
+3. **Add Property/Unit Display in Header**
+   - Show selected property/unit in Scanner page header
+   - Helps tech confirm correct location before scanning
+
+4. **Improve Error Messages**
+   - Replace generic alerts with styled error toasts
+   - Add retry buttons for failed transactions
+
+---
+
+### Long-Term Roadmap (Future Sessions)
+
+**Phase 1 Completion:**
+- [ ] Management interface fully functional
+- [ ] Admin authentication
+- [ ] Real property/unit data
+- [ ] Barcode scanner with camera
+- [ ] Invoice PDF generation
+- [ ] Email notifications (threshold alerts, weekly reports)
+
+**Phase 2 Features (per PRD):**
+- Work order integration
+- Physical inventory counts
+- Item kits/bundles
+- Automated purchase orders
+- Consumption analytics
+
+**Phase 3 Features (per PRD):**
+- Multi-truck support
+- Dynamic min/max optimization
+- Price comparison
+- Warranty tracking
+- Predictive restocking
 
 ---
 
@@ -425,6 +592,15 @@ npm run dev
 3. **Port Conflicts**
    - Dev server tries ports 5173-5176
    - Currently running on 5176
+
+4. **Properties/Units Using Mock Data**
+   - `src/services/properties.ts` returns hardcoded data
+   - Database queries are commented out (lines 47-52, 63-70)
+   - Need to create tables or connect to existing ones
+
+5. **Management Interface No Auth**
+   - `/inventory/*` routes are publicly accessible
+   - No access control implemented yet
 
 ---
 

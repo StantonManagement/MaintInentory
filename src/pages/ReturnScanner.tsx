@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   ChevronLeft,
@@ -9,7 +9,9 @@ import {
   Trash2,
   RotateCcw,
 } from 'lucide-react'
-import { catalogItems } from '../data/mock/catalog'
+import { getCatalogItems, searchCatalogItems } from '@/services/catalog'
+import { createTransaction } from '@/services/transactions'
+import type { CatalogItem } from '@/lib/supabase'
 
 interface ReturnItem {
   id: string
@@ -25,27 +27,76 @@ export function ReturnScanner() {
   const {
     techName = 'Technician',
     techId = '',
+    truckId = '',
     propertyId = '',
+    propertyName = '',
     unitId = '',
+    unitNumber = '',
   } = location.state || {}
 
   const [cart, setCart] = useState<ReturnItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showSearch, setShowSearch] = useState(false)
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
+  const [filteredItems, setFilteredItems] = useState<CatalogItem[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleBack = () => {
-    navigate('/return', { state: { techName, techId } })
+  // Load catalog items on mount
+  useEffect(() => {
+    loadCatalog()
+  }, [])
+
+  // Update filtered items when search query changes
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      searchItems(searchQuery)
+    } else {
+      setFilteredItems(catalogItems)
+    }
+  }, [searchQuery, catalogItems])
+
+  const loadCatalog = async () => {
+    setIsLoading(true)
+    try {
+      const items = await getCatalogItems()
+      setCatalogItems(items)
+      setFilteredItems(items)
+    } catch (error) {
+      console.error('Failed to load catalog:', error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleScanBarcode = () => {
-    // Simulate scanning by adding a random item with negative quantity
-    const randomItem = catalogItems[Math.floor(Math.random() * catalogItems.length)]
-    addItemToCart({
-      id: randomItem.id,
-      sku: randomItem.upc_barcode || randomItem.bin_barcode || `SKU-${randomItem.id}`,
-      name: randomItem.name,
-      price: randomItem.unit_cost,
-    })
+  const searchItems = async (query: string) => {
+    setIsLoading(true)
+    try {
+      const items = await searchCatalogItems(query)
+      setFilteredItems(items)
+    } catch (error) {
+      console.error('Failed to search catalog:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleBack = () => {
+    navigate('/return', { state: { techName, techId, truckId } })
+  }
+
+  const handleScanBarcode = async () => {
+    // TODO: Implement actual barcode scanning with html5-qrcode or quagga2
+    // For now, simulate scanning by adding a random item from catalog
+    if (catalogItems.length > 0) {
+      const randomItem = catalogItems[Math.floor(Math.random() * catalogItems.length)]
+      addItemToCart({
+        id: randomItem.id,
+        sku: randomItem.sku,
+        name: randomItem.name,
+        price: randomItem.unit_cost,
+      })
+    }
   }
 
   const addItemToCart = (item: { id: string; sku: string; name: string; price: number }) => {
@@ -87,26 +138,61 @@ export function ReturnScanner() {
     return cart.reduce((count, item) => count + Math.abs(item.quantity), 0)
   }
 
-  const handleCompleteReturn = () => {
+  const handleCompleteReturn = async () => {
     if (cart.length === 0) return
+    if (!truckId || !techId) {
+      alert('Missing truck or technician information')
+      return
+    }
 
-    navigate('/return-complete', {
-      state: {
-        techName,
-        techId,
-        propertyId,
-        unitId,
-        cart,
-        total: calculateTotal(),
-      },
-    })
+    setIsSubmitting(true)
+
+    try {
+      // Convert negative quantities to positive for return transaction
+      const returnCart = cart.map(item => ({
+        ...item,
+        quantity: Math.abs(item.quantity)
+      }))
+
+      const result = await createTransaction({
+        truckId,
+        technicianId: techId,
+        technicianName: techName,
+        propertyId: propertyId || undefined,
+        propertyName: propertyName || undefined,
+        unitId: unitId || undefined,
+        unitNumber: unitNumber || undefined,
+        transactionType: 'return',
+        cart: returnCart,
+        notes: undefined
+      })
+
+      if (result.success) {
+        navigate('/return-complete', {
+          state: {
+            techName,
+            techId,
+            truckId,
+            propertyId,
+            propertyName,
+            unitId,
+            unitNumber,
+            cart,
+            total: calculateTotal(),
+            transactionId: result.transactionId,
+            invoiceNumber: result.invoiceNumber,
+          },
+        })
+      } else {
+        alert(`Failed to create return transaction: ${result.error}`)
+        setIsSubmitting(false)
+      }
+    } catch (error) {
+      console.error('Return error:', error)
+      alert('Failed to complete return')
+      setIsSubmitting(false)
+    }
   }
-
-  const filteredItems = catalogItems.filter((item) =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (item.upc_barcode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (item.bin_barcode || '').toLowerCase().includes(searchQuery.toLowerCase())
-  )
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 flex flex-col">
@@ -175,35 +261,41 @@ export function ReturnScanner() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name or barcode..."
+                  placeholder="Search by name or SKU..."
                   className="w-full h-16 px-6 text-lg font-medium border-2 border-gray-300 rounded-2xl focus:border-amber-500 focus:ring-4 focus:ring-amber-100 transition-all shadow-sm"
                 />
                 <div className="max-h-96 overflow-y-auto space-y-3">
-                  {filteredItems.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => addItemToCart({
-                        id: item.id,
-                        sku: item.upc_barcode || item.bin_barcode || `SKU-${item.id}`,
-                        name: item.name,
-                        price: item.unit_cost,
-                      })}
-                      className="w-full p-5 bg-gradient-to-r from-gray-50 to-amber-50/50 hover:from-amber-50 hover:to-amber-100 rounded-2xl flex items-center justify-between active:scale-98 transition-all shadow-sm border border-gray-200"
-                    >
-                      <div className="text-left">
-                        <p className="font-bold text-gray-900 text-lg">{item.name}</p>
-                        <p className="text-sm text-gray-600 font-medium">{item.shelf_zone}</p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <p className="text-xl font-bold text-amber-600">
-                          ${item.unit_cost.toFixed(2)}
-                        </p>
-                        <div className="bg-amber-100 p-2 rounded-xl">
-                          <Plus className="w-6 h-6 text-amber-600" strokeWidth={2.5} />
+                  {isLoading ? (
+                    <div className="text-center py-8 text-gray-500">Loading items...</div>
+                  ) : filteredItems.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">No items found</div>
+                  ) : (
+                    filteredItems.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => addItemToCart({
+                          id: item.id,
+                          sku: item.sku,
+                          name: item.name,
+                          price: item.unit_cost,
+                        })}
+                        className="w-full p-5 bg-gradient-to-r from-gray-50 to-amber-50/50 hover:from-amber-50 hover:to-amber-100 rounded-2xl flex items-center justify-between active:scale-98 transition-all shadow-sm border border-gray-200"
+                      >
+                        <div className="text-left">
+                          <p className="font-bold text-gray-900 text-lg">{item.name}</p>
+                          <p className="text-sm text-gray-600 font-medium">{item.sku}</p>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                        <div className="flex items-center gap-4">
+                          <p className="text-xl font-bold text-amber-600">
+                            ${item.unit_cost.toFixed(2)}
+                          </p>
+                          <div className="bg-amber-100 p-2 rounded-xl">
+                            <Plus className="w-6 h-6 text-amber-600" strokeWidth={2.5} />
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -281,9 +373,10 @@ export function ReturnScanner() {
                   </div>
                   <button
                     onClick={handleCompleteReturn}
-                    className="w-full h-20 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-2xl font-bold rounded-2xl shadow-2xl hover:shadow-3xl active:scale-98 transition-all"
+                    disabled={isSubmitting}
+                    className="w-full h-20 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-2xl font-bold rounded-2xl shadow-2xl hover:shadow-3xl active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Complete Return →
+                    {isSubmitting ? 'Processing...' : 'Complete Return →'}
                   </button>
                 </div>
               </>

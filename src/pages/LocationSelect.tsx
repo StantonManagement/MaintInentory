@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Package, ChevronLeft, MapPin } from 'lucide-react'
+import { getProperties, getUnitsByProperty, type Property, type Unit } from '@/services/properties'
 
 export function LocationSelect() {
   const navigate = useNavigate()
@@ -9,23 +10,48 @@ export function LocationSelect() {
 
   const [selectedProperty, setSelectedProperty] = useState('')
   const [selectedUnit, setSelectedUnit] = useState('')
+  const [properties, setProperties] = useState<Property[]>([])
+  const [units, setUnits] = useState<Unit[]>([])
+  const [isLoadingProperties, setIsLoadingProperties] = useState(false)
+  const [isLoadingUnits, setIsLoadingUnits] = useState(false)
 
-  // TODO: Replace with actual property data from Supabase
-  const properties = [
-    { id: '1', name: '123 Main St, Hartford, CT' },
-    { id: '2', name: '456 Oak Ave, Hartford, CT' },
-    { id: '3', name: '789 Elm Rd, West Hartford, CT' },
-  ]
+  // Load properties on mount
+  useEffect(() => {
+    loadProperties()
+  }, [])
 
-  // TODO: Replace with actual unit data based on selected property
-  const units = selectedProperty
-    ? [
-        { id: '1', number: 'Unit 101' },
-        { id: '2', number: 'Unit 102' },
-        { id: '3', number: 'Unit 201' },
-        { id: '4', number: 'Unit 202' },
-      ]
-    : []
+  // Load units when property is selected
+  useEffect(() => {
+    if (selectedProperty) {
+      loadUnits(selectedProperty)
+    } else {
+      setUnits([])
+    }
+  }, [selectedProperty])
+
+  const loadProperties = async () => {
+    setIsLoadingProperties(true)
+    try {
+      const data = await getProperties()
+      setProperties(data)
+    } catch (error) {
+      console.error('Failed to load properties:', error)
+    } finally {
+      setIsLoadingProperties(false)
+    }
+  }
+
+  const loadUnits = async (propertyId: string) => {
+    setIsLoadingUnits(true)
+    try {
+      const data = await getUnitsByProperty(propertyId)
+      setUnits(data)
+    } catch (error) {
+      console.error('Failed to load units:', error)
+    } finally {
+      setIsLoadingUnits(false)
+    }
+  }
 
   const handleBack = () => {
     navigate('/home', { state: { techName, techId, truckId } })
@@ -45,9 +71,9 @@ export function LocationSelect() {
         techId,
         truckId,
         propertyId: selectedProperty,
-        propertyName: property?.name || '',
+        propertyName: property?.address || property?.name || '',
         unitId: selectedUnit,
-        unitNumber: unit?.number || '',
+        unitNumber: unit?.unit_number || '',
       },
     })
   }
@@ -109,12 +135,15 @@ export function LocationSelect() {
                 setSelectedProperty(e.target.value)
                 setSelectedUnit('') // Reset unit when property changes
               }}
-              className="w-full h-18 px-6 text-lg font-medium border-2 border-gray-300 rounded-2xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all bg-white shadow-sm hover:border-gray-400"
+              disabled={isLoadingProperties}
+              className="w-full h-18 px-6 text-lg font-medium border-2 border-gray-300 rounded-2xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all bg-white shadow-sm hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="">Select a property...</option>
+              <option value="">
+                {isLoadingProperties ? 'Loading properties...' : 'Select a property...'}
+              </option>
               {properties.map((property) => (
                 <option key={property.id} value={property.id}>
-                  {property.name}
+                  {property.address}
                 </option>
               ))}
             </select>
@@ -132,15 +161,19 @@ export function LocationSelect() {
               id="unit"
               value={selectedUnit}
               onChange={(e) => setSelectedUnit(e.target.value)}
-              disabled={!selectedProperty}
+              disabled={!selectedProperty || isLoadingUnits}
               className="w-full h-18 px-6 text-lg font-medium border-2 border-gray-300 rounded-2xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all bg-white disabled:bg-gray-50 disabled:cursor-not-allowed shadow-sm hover:border-gray-400 disabled:hover:border-gray-300"
             >
               <option value="">
-                {selectedProperty ? 'Select a unit...' : 'Select property first'}
+                {isLoadingUnits
+                  ? 'Loading units...'
+                  : selectedProperty
+                    ? 'Select a unit...'
+                    : 'Select property first'}
               </option>
               {units.map((unit) => (
                 <option key={unit.id} value={unit.id}>
-                  {unit.number}
+                  Unit {unit.unit_number}
                 </option>
               ))}
             </select>
