@@ -60,6 +60,7 @@ export interface Transaction {
   property_name: string | null
   unit_id: string | null
   unit_number: string | null
+  work_order_id: string | null
   total_amount: number
   notes: string | null
   invoice_number: string | null
@@ -67,6 +68,19 @@ export interface Transaction {
   processed_at: string | null
   processed_by: string | null
   created_at: string
+}
+
+export interface WorkOrder {
+  id: string
+  property_id: string
+  unit_id: string | null
+  title: string
+  description: string | null
+  status: 'open' | 'in_progress' | 'completed' | 'cancelled'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  assigned_to: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface TransactionLine {

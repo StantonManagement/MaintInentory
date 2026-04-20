@@ -1,15 +1,57 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Edit2, Check, X, Lock, Unlock } from 'lucide-react'
-import { trucks, technicians } from '../../data/mock/technicians'
+import {
+  getTrucks,
+  getTechnicians,
+  updateTechnicianPin,
+  type Truck,
+  type Technician,
+} from '@/services/trucks'
 
 export function TrucksPage() {
+  const [isLoading, setIsLoading] = useState(true)
+  const [trucks, setTrucks] = useState<Truck[]>([])
+  const [technicians, setTechnicians] = useState<Technician[]>([])
   const [editingTech, setEditingTech] = useState<string | null>(null)
   const [pinInputs, setPinInputs] = useState<Record<string, string>>({})
   const [showPin, setShowPin] = useState<Record<string, boolean>>({})
 
-  const handleSavePin = (techId: string) => {
-    console.log('Saving PIN for tech:', techId, 'PIN:', pinInputs[techId])
-    setEditingTech(null)
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    setIsLoading(true)
+    try {
+      const [trucksData, techsData] = await Promise.all([
+        getTrucks(),
+        getTechnicians(),
+      ])
+      setTrucks(trucksData)
+      setTechnicians(techsData)
+    } catch (error) {
+      console.error('Failed to load trucks data:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSavePin = async (techId: string) => {
+    const newPin = pinInputs[techId]
+    if (!newPin || newPin.length !== 4) {
+      alert('PIN must be exactly 4 digits')
+      return
+    }
+
+    const result = await updateTechnicianPin(techId, newPin)
+    if (result.success) {
+      alert('PIN updated successfully!')
+      setEditingTech(null)
+      setPinInputs({ ...pinInputs, [techId]: '' })
+      await loadData()
+    } else {
+      alert(`Failed to update PIN: ${result.error}`)
+    }
   }
 
   return (
@@ -25,18 +67,25 @@ export function TrucksPage() {
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h2 className="text-lg font-semibold text-gray-900">Trucks</h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <th className="px-6 py-4">Name</th>
-                <th className="px-6 py-4">Description</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {trucks.map((truck) => (
+        {isLoading ? (
+          <div className="p-8 space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-16 bg-gray-100 rounded animate-pulse"></div>
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4">Name</th>
+                  <th className="px-6 py-4">Description</th>
+                  <th className="px-6 py-4 text-center">Status</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {trucks.map((truck) => (
                 <tr key={truck.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 font-medium text-gray-900">{truck.name}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{truck.description}</td>
@@ -58,10 +107,11 @@ export function TrucksPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Technician PINs Section */}
@@ -70,18 +120,25 @@ export function TrucksPage() {
           <h2 className="text-lg font-semibold text-gray-900">Technician PINs</h2>
           <p className="text-sm text-gray-600">Manage PIN codes for tablet access</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <th className="px-6 py-4">Technician</th>
-                <th className="px-6 py-4">PIN</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {technicians.map((tech) => (
+        {isLoading ? (
+          <div className="p-8 space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-16 bg-gray-100 rounded animate-pulse"></div>
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4">Technician</th>
+                  <th className="px-6 py-4">PIN</th>
+                  <th className="px-6 py-4 text-center">Status</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {technicians.map((tech) => (
                 <tr key={tech.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 font-medium text-gray-900">{tech.name}</td>
                   <td className="px-6 py-4">
@@ -90,7 +147,7 @@ export function TrucksPage() {
                         <input
                           type={showPin[tech.id] ? 'text' : 'password'}
                           maxLength={4}
-                          defaultValue={tech.pin}
+                          value={pinInputs[tech.id] || ''}
                           onChange={(e) => setPinInputs({
                             ...pinInputs,
                             [tech.id]: e.target.value
@@ -147,11 +204,12 @@ export function TrucksPage() {
                       </button>
                     )}
                   </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

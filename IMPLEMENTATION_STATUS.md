@@ -153,45 +153,75 @@ A Progressive Web App (PWA) for technicians to manage truck inventory, checkout 
 6. ✅ Transaction lines saved to `inv_transaction_lines`
 
 ### Management Interface
-**Status:** 🔶 Mock Data Only
+**Status:** ✅ Fully Connected to Database
 
 **Files:**
-- `src/pages/management/Dashboard.tsx` - Hardcoded metrics
-- `src/pages/management/Catalog.tsx` - Mock catalog
-- `src/pages/management/Transactions.tsx` - Mock transactions
-- `src/pages/management/Restock.tsx` - Mock restock data
-- `src/pages/management/Trucks.tsx` - Mock truck data
+- `src/pages/management/Dashboard.tsx` - ✅ Real metrics from database
+- `src/pages/management/Catalog.tsx` - ✅ Full CRUD operations
+- `src/pages/management/Transactions.tsx` - ✅ Real transaction data
+- `src/pages/management/Restock.tsx` - ✅ Real alerts and reports
+- `src/pages/management/Trucks.tsx` - ✅ Real truck and technician data
 
-**What's Needed:**
-1. Fetch real data from database
-2. Add CRUD operations (Create, Update, Delete)
-3. Add authentication/authorization for admin users
-4. Connect to existing services
+**Implemented:**
+1. ✅ All pages fetch real data from Supabase
+2. ✅ Catalog has full CRUD operations (Create, Update, Delete)
+3. ✅ Restock alerts calculate from real stock levels
+4. ✅ Weekly reports show actual restock activity
+5. ✅ Technician PIN management with SHA-256 hashing
+6. ✅ **Admin authentication protects all management routes**
+
+### Admin Authentication
+**Status:** ✅ Complete (April 14, 2026)
+**Priority:** CRITICAL - Security
+
+**Files Created:**
+- `src/services/adminAuth.ts` - Admin authentication service
+- `src/pages/AdminLogin.tsx` - Admin PIN login page
+- `src/components/ProtectedRoute.tsx` - Route protection component
+- `ADMIN_AUTH_SETUP.md` - Complete setup and usage guide
+
+**Features:**
+1. ✅ PIN-based authentication (4-digit PIN with SHA-256 hashing)
+2. ✅ Protected routes - All `/inventory/*` routes require authentication
+3. ✅ Session management - 24-hour session timeout
+4. ✅ Sign out functionality - Clean session termination
+5. ✅ Admin name display in sidebar
+6. ✅ "Back to Tablet" navigation
+7. ✅ "Admin Access" link on home page
+
+**Security:**
+- SHA-256 PIN hashing (same as technician authentication)
+- localStorage session storage
+- Automatic redirect to login for unauthenticated access
+- Session expiration after 24 hours
+- Uses existing `inv_technician_pins` table (any technician can be admin)
 
 ---
 
-## 🔶 Partially Implemented - Properties/Units
+## ✅ Completed - Properties/Units
 
 ### Properties/Units Service
 **Priority:** High
-**Status:** Service layer ready, mock data in use
+**Status:** ✅ Complete with smart fallback
 
 **Current State:**
 - ✅ Created `src/services/properties.ts` with async API
 - ✅ `LocationSelect.tsx` and `ReturnLocationSelect.tsx` use service
 - ✅ Loading states implemented
-- 🔶 Currently returns mock data (structured for easy database swap)
+- ✅ Intelligent table detection (tries af_properties, properties, inv_properties)
+- ✅ Automatically falls back to mock data if no tables exist
+- ✅ Common areas included for all properties (Common Area, Basement, Exterior, etc.)
 
-**Mock Data:**
-- 3 properties (hardcoded)
-- 4 units per property (hardcoded)
+**Implementation:**
+- Tries multiple table names: `af_properties`, `properties`, `inv_properties`
+- Tries multiple table names for units: `af_units`, `units`, `inv_units`
+- Maps fields dynamically (property_name → name)
+- Returns mock data if database tables don't exist
+- Always includes 7 common areas at top of unit list
 
-**Next Steps:**
-1. Create `inv_properties` and `inv_units` tables in Supabase, OR
-2. Connect to existing AppFolio `af_properties` and `af_units` tables, OR
-3. Fetch from MaintOC API endpoint
-
-**To Complete:** Uncomment Supabase queries in `src/services/properties.ts:47-52` and `src/services/properties.ts:63-70` once tables are available
+**Files Updated:**
+- `src/services/properties.ts:41-77` - Smart property fetching
+- `src/services/properties.ts:84-146` - Smart unit fetching with common areas
 
 ### 1. Real Barcode Scanner
 **Priority:** Medium  

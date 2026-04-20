@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   AlertTriangle,
   CheckCircle,
@@ -6,78 +6,80 @@ import {
   Download,
   FileText,
 } from 'lucide-react'
-import { catalogItems, categoryLabels } from '../../data/mock/catalog'
-import { stockLevels } from '../../data/mock/technicians'
+import {
+  getRestockAlerts,
+  getTruckTemplate,
+  markItemRestocked,
+  getWeeklyReports,
+  type RestockAlert,
+  type TemplateItem,
+} from '@/services/restock'
 
-interface AlertItem {
-  catalog_item_id: string
-  name: string
-  category: string
-  current_quantity: number
-  min_quantity: number
-  max_quantity: number
-  reorder_quantity: number
-  supplier: string
-  alert_sent: boolean
+const categoryLabels: Record<string, string> = {
+  plumbing: 'Plumbing',
+  electrical: 'Electrical',
+  hardware: 'Hardware',
+  paint: 'Paint',
+  lighting: 'Lighting',
+  safety: 'Safety',
+  hvac: 'HVAC',
+  appliance_parts: 'Appliance Parts',
+  flooring: 'Flooring',
+  cleaning: 'Cleaning',
+  doors_locks: 'Doors & Locks',
+  windows: 'Windows',
+  other: 'Other',
 }
 
 export function RestockPage() {
   const [activeTab, setActiveTab] = useState<'alerts' | 'template' | 'reports'>('alerts')
   const [restockQty, setRestockQty] = useState<Record<string, number>>({})
+  const [isLoading, setIsLoading] = useState(true)
+  const [activeAlerts, setActiveAlerts] = useState<RestockAlert[]>([])
+  const [templateItems, setTemplateItems] = useState<TemplateItem[]>([])
+  const [weeklyReports, setWeeklyReports] = useState<{ date: string; items_below: number; total_items: number }[]>([])
 
-  // Generate alerts from stock levels below minimum
-  const activeAlerts: AlertItem[] = stockLevels
-    .map(stock => {
-      const item = catalogItems.find(c => c.id === stock.catalog_item_id)
-      if (!item || !item.is_active) return null
-      const isBelowMin = stock.current_quantity <= item.min_quantity
-      if (!isBelowMin) return null
-      return {
-        catalog_item_id: stock.catalog_item_id,
-        name: item.name,
-        category: item.category,
-        current_quantity: stock.current_quantity,
-        min_quantity: item.min_quantity,
-        max_quantity: item.max_quantity,
-        reorder_quantity: item.max_quantity - stock.current_quantity,
-        supplier: item.preferred_supplier || 'N/A',
-        alert_sent: true,
-      }
-    })
-    .filter(Boolean) as AlertItem[]
+  useEffect(() => {
+    loadData()
+  }, [])
 
-  // Generate full template view
-  const templateItems = stockLevels.map(stock => {
-    const item = catalogItems.find(c => c.id === stock.catalog_item_id)
-    if (!item) return null
-    const gap = item.max_quantity - stock.current_quantity
-    let status: 'ok' | 'low' | 'reorder' = 'ok'
-    if (stock.current_quantity <= item.min_quantity) {
-      status = 'reorder'
-    } else if (stock.current_quantity <= item.min_quantity + 2) {
-      status = 'low'
+  const loadData = async () => {
+    setIsLoading(true)
+    try {
+      const [alerts, template, reports] = await Promise.all([
+        getRestockAlerts(),
+        getTruckTemplate(),
+        getWeeklyReports(),
+      ])
+      setActiveAlerts(alerts)
+      setTemplateItems(template)
+      setWeeklyReports(reports)
+    } catch (error) {
+      console.error('Failed to load restock data:', error)
+    } finally {
+      setIsLoading(false)
     }
-    return {
-      catalog_item_id: stock.catalog_item_id,
-      name: item.name,
-      category: item.category,
-      zone: item.shelf_zone,
-      current: stock.current_quantity,
-      max: item.max_quantity,
-      gap,
-      status,
+  }
+
+  const handleMarkRestocked = async (itemId: string) => {
+    const quantity = restockQty[itemId] || 0
+    if (quantity <= 0) {
+      alert('Please enter a valid quantity')
+      return
     }
-  }).filter(Boolean)
 
-  const weeklyReports = [
-    { date: '2025-04-04', items_below: 3, total_items: 15 },
-    { date: '2025-03-28', items_below: 5, total_items: 15 },
-    { date: '2025-03-21', items_below: 2, total_items: 14 },
-    { date: '2025-03-14', items_below: 4, total_items: 15 },
-  ]
+    // TODO: Get actual truck ID from context/auth
+    const truckId = '00000000-0000-0000-0000-000000000001'
 
-  const handleMarkRestocked = (itemId: string) => {
-    console.log('Marking restocked:', itemId, 'Quantity:', restockQty[itemId])
+    const result = await markItemRestocked(itemId, quantity, truckId)
+    if (result.success) {
+      alert('Item marked as restocked successfully!')
+      await loadData() // Reload data
+      // Clear the quantity input
+      setRestockQty({ ...restockQty, [itemId]: 0 })
+    } else {
+      alert(`Failed to mark as restocked: ${result.error}`)
+    }
   }
 
   return (
@@ -139,7 +141,13 @@ export function RestockPage() {
       {/* Active Alerts Tab */}
       {activeTab === 'alerts' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          {activeAlerts.length === 0 ? (
+          {isLoading ? (
+            <div className="p-8 space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-16 bg-gray-100 rounded animate-pulse"></div>
+              ))}
+            </div>
+          ) : activeAlerts.length === 0 ? (
             <div className="p-12 text-center">
               <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-8 h-8 text-green-600" />
@@ -265,16 +273,16 @@ export function RestockPage() {
       {activeTab === 'reports' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h2 className="text-lg font-semibold text-gray-900">Weekly Inventory Reports</h2>
-            <p className="text-sm text-gray-600">Historical restock reports (Fridays)</p>
+            <h2 className="text-lg font-semibold text-gray-900">Weekly Restock Activity</h2>
+            <p className="text-sm text-gray-600">Restock history for the last 4 weeks (by Friday)</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <th className="px-6 py-4">Report Date</th>
-                  <th className="px-6 py-4 text-center">Items Below Min</th>
-                  <th className="px-6 py-4 text-center">Total Items</th>
+                  <th className="px-6 py-4">Week Ending (Friday)</th>
+                  <th className="px-6 py-4 text-center">Items Restocked</th>
+                  <th className="px-6 py-4 text-center">Total Catalog</th>
                   <th className="px-6 py-4 text-center">Actions</th>
                 </tr>
               </thead>

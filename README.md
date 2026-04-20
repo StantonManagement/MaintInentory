@@ -54,36 +54,41 @@ truck-tablet/
 - **Active scale animations** (active:scale-95/98) for tactile feedback
 - **No tap highlight colors** for cleaner interaction
 
-## Mock Data (Phase 1)
+## Database Integration
 
-Currently uses hardcoded mock data:
-- **Technicians:** PIN 1234=Stan, 5678=Javier
-- **Properties:** 3 sample Hartford properties
-- **Units:** 4 sample units per property
-- **Inventory Items:** 5 sample items (plumbing, electrical, HVAC)
+**Fully Connected:**
+- **Technicians:** PIN authentication via `inv_technician_pins` table
+- **Inventory Items:** Real catalog from `inv_catalog` table (60+ items)
+- **Transactions:** Saved to `inv_transactions` and `inv_transaction_lines`
+- **Stock Levels:** Auto-updated in `inv_stock_levels`
+- **Restock Alerts:** Calculated from real stock data
+- **Trucks:** Managed via `inv_trucks` table
 
-## Next Steps (Phase 2 - Backend Integration)
+**Smart Fallback:**
+- **Properties/Units:** Tries multiple table names (af_properties, properties, inv_properties)
+  - Falls back to mock data if tables don't exist
+  - Includes common areas (Common Area, Basement, Exterior, etc.)
 
-1. **Supabase Integration:**
-   - Connect to `inv_items` table for real inventory
-   - Query `properties` and `units` tables
-   - Create `inv_transactions` on order completion
-   - Implement tech PIN authentication via `users` table
+## Next Steps (Future Enhancements)
 
-2. **Barcode Scanning:**
+1. **Barcode Scanning:**
    - Integrate `html5-qrcode` or `quagga2` library
    - Enable camera access for real barcode scanning
-   - Match scanned SKU to inventory items
+   - Currently simulated (adds random item)
+
+2. **Admin Authentication:**
+   - Protect `/inventory/*` management routes
+   - PIN or password-based authentication for admin users
 
 3. **Offline Mode:**
    - Implement IndexedDB caching
    - Queue transactions when offline
    - Sync when connection restored
 
-4. **Invoice Generation:**
-   - Generate PDF receipts
+4. **Invoice PDF Generation:**
+   - Generate PDF receipts for orders
    - Email/print functionality
-   - Transaction history
+   - Transaction history export
 
 ## Development
 

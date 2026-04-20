@@ -12,6 +12,7 @@ import {
 import { getCatalogItems, searchCatalogItems } from '@/services/catalog'
 import { createTransaction } from '@/services/transactions'
 import type { CatalogItem } from '@/lib/supabase'
+import { BarcodeScanner } from '@/components/BarcodeScanner'
 
 interface ReturnItem {
   id: string
@@ -41,6 +42,7 @@ export function ReturnScanner() {
   const [filteredItems, setFilteredItems] = useState<CatalogItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
 
   // Load catalog items on mount
   useEffect(() => {
@@ -85,17 +87,27 @@ export function ReturnScanner() {
     navigate('/return', { state: { techName, techId, truckId } })
   }
 
-  const handleScanBarcode = async () => {
-    // TODO: Implement actual barcode scanning with html5-qrcode or quagga2
-    // For now, simulate scanning by adding a random item from catalog
-    if (catalogItems.length > 0) {
-      const randomItem = catalogItems[Math.floor(Math.random() * catalogItems.length)]
+  const handleScanBarcode = () => {
+    setShowScanner(true)
+  }
+
+  const handleBarcodeScanned = (code: string) => {
+    // Find item by SKU or barcode
+    const item = catalogItems.find(
+      (item) => item.sku === code || item.sku.toLowerCase() === code.toLowerCase()
+    )
+
+    if (item) {
       addItemToCart({
-        id: randomItem.id,
-        sku: randomItem.sku,
-        name: randomItem.name,
-        price: randomItem.unit_cost,
+        id: item.id,
+        sku: item.sku,
+        name: item.name,
+        price: item.unit_cost,
       })
+      setShowScanner(false)
+    } else {
+      // Show error - item not found
+      alert(`Item with SKU "${code}" not found in catalog`)
     }
   }
 
@@ -384,6 +396,13 @@ export function ReturnScanner() {
           </div>
         </div>
       </div>
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScanner
+        isActive={showScanner}
+        onScan={handleBarcodeScanned}
+        onClose={() => setShowScanner(false)}
+      />
     </div>
   )
 }

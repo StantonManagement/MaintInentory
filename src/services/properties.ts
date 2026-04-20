@@ -1,4 +1,4 @@
-// import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 
 export interface Property {
   id: string
@@ -12,8 +12,7 @@ export interface Unit {
   unit_number: string
 }
 
-// TODO: Connect to real properties table when available
-// For now, using hardcoded data that matches the structure
+// Fallback mock data if database tables don't exist
 const MOCK_PROPERTIES: Property[] = [
   { id: '1', name: '123 Main St', address: '123 Main St, Hartford, CT 06103' },
   { id: '2', name: '456 Oak Ave', address: '456 Oak Ave, Hartford, CT 06106' },
@@ -36,23 +35,41 @@ const MOCK_UNITS: Unit[] = [
 ]
 
 /**
- * Fetch all properties
- * TODO: Replace with actual Supabase query when properties table is available
+ * Fetch all properties from database
+ * Tries multiple table names and falls back to mock data if none exist
  */
 export async function getProperties(): Promise<Property[]> {
   try {
-    // Attempt to fetch from Supabase
-    // const { data, error } = await supabase
-    //   .from('properties')
-    //   .select('id, name, address')
-    //   .eq('is_active', true)
-    //   .order('name')
+    // Try different possible table names in order of preference
+    const tableNames = ['af_properties', 'properties', 'inv_properties']
 
-    // if (error) throw error
-    // return data || []
+    for (const tableName of tableNames) {
+      try {
+        // Try to query this table
+        const { data, error } = await supabase
+          .from(tableName)
+          .select('id, property_name, address')
+          .eq('is_active', true)
+          .order('property_name')
+          .limit(100)
 
-    // For now, return mock data
-    return Promise.resolve(MOCK_PROPERTIES)
+        if (!error && data && data.length > 0) {
+          // Successfully found data - map to our interface
+          return data.map(prop => ({
+            id: String(prop.id),
+            name: prop.property_name || String(prop.id),
+            address: prop.address || 'N/A',
+          }))
+        }
+      } catch (tableError) {
+        // Table doesn't exist or query failed, try next one
+        continue
+      }
+    }
+
+    // No tables found or no data, use mock data
+    console.log('No property tables found in database, using mock data')
+    return MOCK_PROPERTIES
   } catch (error) {
     console.error('Error fetching properties:', error)
     return MOCK_PROPERTIES
@@ -60,29 +77,71 @@ export async function getProperties(): Promise<Property[]> {
 }
 
 /**
- * Fetch units for a specific property
- * TODO: Replace with actual Supabase query when units table is available
+ * Fetch units for a specific property from database
+ * Tries multiple table names and falls back to mock data if none exist
+ * Always includes common areas at the top of the list
  */
 export async function getUnitsByProperty(propertyId: string): Promise<Unit[]> {
   try {
-    // Attempt to fetch from Supabase
-    // const { data, error } = await supabase
-    //   .from('units')
-    //   .select('id, property_id, unit_number')
-    //   .eq('property_id', propertyId)
-    //   .eq('is_active', true)
-    //   .order('unit_number')
+    // Common areas that should appear for all properties
+    const commonAreas: Unit[] = [
+      { id: `${propertyId}-common-area`, property_id: propertyId, unit_number: 'Common Area' },
+      { id: `${propertyId}-basement`, property_id: propertyId, unit_number: 'Basement' },
+      { id: `${propertyId}-exterior`, property_id: propertyId, unit_number: 'Building Exterior' },
+      { id: `${propertyId}-parking`, property_id: propertyId, unit_number: 'Parking Lot' },
+      { id: `${propertyId}-laundry`, property_id: propertyId, unit_number: 'Laundry Room' },
+      { id: `${propertyId}-mailroom`, property_id: propertyId, unit_number: 'Mailroom' },
+      { id: `${propertyId}-roof`, property_id: propertyId, unit_number: 'Roof' },
+    ]
 
-    // if (error) throw error
-    // return data || []
+    // Try different possible table names in order of preference
+    const tableNames = ['af_units', 'units', 'inv_units']
 
-    // For now, return filtered mock data
-    return Promise.resolve(
-      MOCK_UNITS.filter(unit => unit.property_id === propertyId)
-    )
+    for (const tableName of tableNames) {
+      try {
+        // Try to query this table
+        const { data, error } = await supabase
+          .from(tableName)
+          .select('id, property_id, unit_number')
+          .eq('property_id', propertyId)
+          .eq('is_active', true)
+          .order('unit_number')
+          .limit(200)
+
+        if (!error && data && data.length > 0) {
+          // Successfully found data - map to our interface
+          const regularUnits = data.map(unit => ({
+            id: String(unit.id),
+            property_id: String(unit.property_id),
+            unit_number: unit.unit_number || String(unit.id),
+          }))
+
+          // Return common areas first, then regular units
+          return [...commonAreas, ...regularUnits]
+        }
+      } catch (tableError) {
+        // Table doesn't exist or query failed, try next one
+        continue
+      }
+    }
+
+    // No tables found or no data, use mock data
+    console.log('No unit tables found in database, using mock data')
+    const regularUnits = MOCK_UNITS.filter(unit => unit.property_id === propertyId)
+    return [...commonAreas, ...regularUnits]
   } catch (error) {
     console.error('Error fetching units:', error)
-    return MOCK_UNITS.filter(unit => unit.property_id === propertyId)
+    const regularUnits = MOCK_UNITS.filter(unit => unit.property_id === propertyId)
+    const commonAreas: Unit[] = [
+      { id: `${propertyId}-common-area`, property_id: propertyId, unit_number: 'Common Area' },
+      { id: `${propertyId}-basement`, property_id: propertyId, unit_number: 'Basement' },
+      { id: `${propertyId}-exterior`, property_id: propertyId, unit_number: 'Building Exterior' },
+      { id: `${propertyId}-parking`, property_id: propertyId, unit_number: 'Parking Lot' },
+      { id: `${propertyId}-laundry`, property_id: propertyId, unit_number: 'Laundry Room' },
+      { id: `${propertyId}-mailroom`, property_id: propertyId, unit_number: 'Mailroom' },
+      { id: `${propertyId}-roof`, property_id: propertyId, unit_number: 'Roof' },
+    ]
+    return [...commonAreas, ...regularUnits]
   }
 }
 

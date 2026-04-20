@@ -12,7 +12,9 @@ import {
 } from 'lucide-react'
 import { getCatalogItems, searchCatalogItems } from '@/services/catalog'
 import { createTransaction } from '@/services/transactions'
-import type { CatalogItem } from '@/lib/supabase'
+import type { CatalogItem, WorkOrder } from '@/lib/supabase'
+import { BarcodeScanner } from '@/components/BarcodeScanner'
+import { getWorkOrdersForProperty } from '@/services/workOrders'
 
 interface CartItem {
   id: string
@@ -42,11 +44,21 @@ export function Scanner() {
   const [filteredItems, setFilteredItems] = useState<CatalogItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([])
+  const [selectedWorkOrderId, setSelectedWorkOrderId] = useState<string>('')
 
   // Load catalog items on mount
   useEffect(() => {
     loadCatalog()
   }, [])
+
+  // Load work orders when property is set
+  useEffect(() => {
+    if (propertyId) {
+      loadWorkOrders()
+    }
+  }, [propertyId, techId])
 
   // Update filtered items when search query changes
   useEffect(() => {
@@ -70,6 +82,17 @@ export function Scanner() {
     }
   }
 
+  const loadWorkOrders = async () => {
+    if (!propertyId) return
+
+    try {
+      const orders = await getWorkOrdersForProperty(propertyId, techId)
+      setWorkOrders(orders)
+    } catch (error) {
+      console.error('Failed to load work orders:', error)
+    }
+  }
+
   const searchItems = async (query: string) => {
     setIsLoading(true)
     try {
@@ -86,17 +109,27 @@ export function Scanner() {
     navigate('/location-select', { state: { techName, techId, truckId } })
   }
 
-  const handleScanBarcode = async () => {
-    // TODO: Implement actual barcode scanning with html5-qrcode or quagga2
-    // For now, simulate scanning by adding a random item from catalog
-    if (catalogItems.length > 0) {
-      const randomItem = catalogItems[Math.floor(Math.random() * catalogItems.length)]
+  const handleScanBarcode = () => {
+    setShowScanner(true)
+  }
+
+  const handleBarcodeScanned = (code: string) => {
+    // Find item by SKU or barcode
+    const item = catalogItems.find(
+      (item) => item.sku === code || item.sku.toLowerCase() === code.toLowerCase()
+    )
+
+    if (item) {
       addItemToCart({
-        id: randomItem.id,
-        sku: randomItem.sku,
-        name: randomItem.name,
-        price: randomItem.unit_cost
+        id: item.id,
+        sku: item.sku,
+        name: item.name,
+        price: item.unit_cost,
       })
+      setShowScanner(false)
+    } else {
+      // Show error - item not found
+      alert(`Item with SKU "${code}" not found in catalog`)
     }
   }
 
@@ -153,6 +186,7 @@ export function Scanner() {
         propertyName: propertyName || undefined,
         unitId: unitId || undefined,
         unitNumber: unitNumber || undefined,
+        workOrderId: selectedWorkOrderId || undefined,
         transactionType: 'checkout',
         cart,
         notes: undefined
@@ -213,6 +247,34 @@ export function Scanner() {
         </div>
       </div>
 
+      {/* Work Order Selection */}
+      {workOrders.length > 0 && (
+        <div className="bg-blue-50/50 border-y border-blue-200 p-4">
+          <div className="max-w-7xl mx-auto">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Link to Work Order (Optional)
+            </label>
+            <select
+              value={selectedWorkOrderId}
+              onChange={(e) => setSelectedWorkOrderId(e.target.value)}
+              className="w-full max-w-2xl h-12 px-4 text-base font-medium border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all shadow-sm bg-white"
+            >
+              <option value="">No work order (general checkout)</option>
+              {workOrders.map((order) => (
+                <option key={order.id} value={order.id}>
+                  #{order.id.slice(0, 8)} - {order.title} ({order.priority} priority)
+                </option>
+              ))}
+            </select>
+            {selectedWorkOrderId && (
+              <p className="text-sm text-gray-600 mt-2">
+                Materials will be linked to this work order for job costing
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
         <div className="h-full max-w-7xl mx-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -230,7 +292,7 @@ export function Scanner() {
                 Tap to Scan Barcode
               </span>
               <span className="text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-full">
-                Demo: adds random item
+                Uses device camera
               </span>
             </button>
 
@@ -375,6 +437,13 @@ export function Scanner() {
           </div>
         </div>
       </div>
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScanner
+        isActive={showScanner}
+        onScan={handleBarcodeScanned}
+        onClose={() => setShowScanner(false)}
+      />
     </div>
   )
 }

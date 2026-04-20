@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   Receipt,
@@ -6,7 +6,10 @@ import {
   AlertTriangle,
   Truck,
   ChevronLeft,
+  LogOut,
+  User,
 } from 'lucide-react'
+import { signOutAdmin, getAdminSession } from '@/services/adminAuth'
 
 const navItems = [
   { path: '/inventory', label: 'Dashboard', icon: LayoutDashboard },
@@ -17,11 +20,19 @@ const navItems = [
 ]
 
 export function Sidebar() {
+  const navigate = useNavigate()
+  const adminSession = getAdminSession()
+
+  const handleSignOut = () => {
+    signOutAdmin()
+    navigate('/admin-login')
+  }
+
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
       {/* Header */}
       <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-4">
           <div className="bg-gray-900 p-2 rounded-lg">
             <Package className="w-6 h-6 text-white" />
           </div>
@@ -30,6 +41,16 @@ export function Sidebar() {
             <p className="text-xs text-gray-500">Management</p>
           </div>
         </div>
+        {/* Admin Info */}
+        {adminSession && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+            <User className="w-4 h-4 text-gray-600" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-500">Logged in as</p>
+              <p className="text-sm font-medium text-gray-900 truncate">{adminSession.adminName}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
@@ -59,7 +80,14 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-200 space-y-2">
+        <button
+          onClick={handleSignOut}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </button>
         <NavLink
           to="/"
           className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"

@@ -16,6 +16,7 @@ interface CreateTransactionParams {
   propertyName?: string
   unitId?: string
   unitNumber?: string
+  workOrderId?: string
   transactionType: 'checkout' | 'return'
   cart: CartItem[]
   notes?: string
@@ -43,6 +44,7 @@ export async function createTransaction(params: CreateTransactionParams): Promis
         property_name: params.propertyName,
         unit_id: params.unitId,
         unit_number: params.unitNumber,
+        work_order_id: params.workOrderId,
         total_amount: total,
         invoice_number: invoiceNumber,
         notes: params.notes,
